@@ -137,6 +137,8 @@ class SelfAttention(Layer):
                 K.minimum(time_step, self.attention_width // 2),
                 K.minimum(time_step, (self.attention_width - 1) // 2),
             )
+            # mask values from current location
+            local = tf.matrix_set_diag(local, tf.zeros(time_step))
             score = score * K.expand_dims(local, 0)
 
         score = K.softmax(score)
