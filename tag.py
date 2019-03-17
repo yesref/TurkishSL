@@ -5,7 +5,7 @@ from util.evaluation import compute_f1
 from util.logger import get_logger
 from util.util import get_max_word_morpheme_dim
 from util.preprocess import get_data_ids, get_batch_lengths, iterate_batches
-import model.models as models
+from model.models import TaggingModel
 
 import numpy as np
 import configargparse
@@ -32,14 +32,13 @@ parser.add_argument('--rnn_type', choices=['LSTM', 'GRU'], default='LSTM')
 parser.add_argument('--use_morpheme', help='whether morpheme features are used', action='store_true', default=False)
 parser.add_argument('--morph_dropout', type=float, help='dropout value for morpheme rnn layer features')
 parser.add_argument('--morph_state_size', type=int, help='number of hidden state in morpheme level rnn', default=50)
+parser.add_argument('--add_morph_att', help='whether morpheme attention is used', action='store_true', default=False)
 parser.add_argument('--use_morph_self_att', help='use self attention or not', action='store_true', default=False)
 parser.add_argument('--self_att_width', type=int, help='width of self attention layer for neighbour words', default=10)
 parser.add_argument('--self_att_dropout', type=float, help='dropout value for self attention layer of morphemes')
+parser.add_argument('--self_att_concat_pos', choices=['BeforeRNN', 'BeforeCRF'], default='BeforeRNN')
 parser.add_argument('--use_cnn', help='whether character features are used or not', action='store_true', default=False)
 parser.add_argument('--use_crf', help='whether crf is used or not', action='store_true', default=False)
-parser.add_argument('--add_attention', help='whether attention is used or not', action='store_true', default=False)
-parser.add_argument('--model_type', default='TaggingModel', choices=['TaggingModel', 'Seq2SeqTaggingModel',
-                    'AttentionSeq2SeqTaggingModel', 'Seq2SeqTaggingModel_Katakana'])
 
 conf = parser.parse_known_args()[0]
 logger.info("The program has started with the configuration in " + conf.config_file + " file")
@@ -90,15 +89,13 @@ embeddings = np.vstack((np.random.uniform(-0.25, 0.25, dimension).reshape(1, dim
 logger.info("A sub embedding table was extracted from original embeddings for studying datasets")
 logger.info("Number of words in new embeddings table: %d" % embeddings.shape[0])
 
-# create a deep learning model to solve this particular tagging problem
-TaggerModel = getattr(models, conf.model_type)
-tagging_model = TaggerModel(embeddings, max_word_length, max_morph_dim, morph_alphabet.size(), char_alphabet.size(),
-                            label_alphabet, conf.add_attention, conf.use_morpheme, conf.use_crf, conf.use_cnn,
-                            conf.rnn_type, conf.cnn_dropouts, conf.rnn_dropout, conf.recurrent_dropout,
-                            conf.morph_dropout, conf.morph_state_size, conf.use_morph_self_att, conf.self_att_width,
-                            conf.self_att_dropout)
+tagging_model = TaggingModel(embeddings, max_word_length, max_morph_dim, morph_alphabet.size(), char_alphabet.size(),
+                             label_alphabet, conf.add_morph_att, conf.use_morpheme, conf.use_crf, conf.use_cnn,
+                             conf.rnn_type, conf.cnn_dropouts, conf.rnn_dropout, conf.recurrent_dropout,
+                             conf.morph_dropout, conf.morph_state_size, conf.use_morph_self_att, conf.self_att_width,
+                             conf.self_att_dropout, conf.self_att_concat_pos)
 tagging_model.compile('rmsprop')
-logger.info("The model was created with Keras framework")
+logger.info("The model was created")
 tagging_model.get_model().summary()
 
 all_results = []
@@ -125,7 +122,7 @@ for j in range(conf.executions):
         pred_labels.append(pred.tolist())
 
     all_results.append(compute_f1(conf.problem_type, pred_labels, correct_labels, label_alphabet))
-    logger.info('\nExecution ' + str(j+1) + ' has finished')
+    logger.info('Execution ' + str(j+1) + ' has finished')
 
 for results in all_results:
     if conf.problem_type == 'NER':

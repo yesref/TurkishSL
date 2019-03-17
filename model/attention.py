@@ -73,13 +73,14 @@ class VanillaAttention(Layer):
 
 class SelfAttention(Layer):
 
-    def __init__(self, output_dim, attention_width=None, attention_dropout=None,
+    def __init__(self, output_dim, attention_width=None, attention_dropout=None, masking=False,
                  q_init='glorot_uniform', q_constraint=None, q_regularize=None,
                  k_init='glorot_uniform', k_constraint=None, k_regularize=None,
                  v_init='glorot_uniform', v_constraint=None, v_regularize=None, **kwargs):
         self.output_dim = output_dim
         self.scale = self.output_dim ** 0.5
         self.attention_width = attention_width
+        self.masking = masking
         self.attention_dropout = attention_dropout
         self.WQ, self.WK, self.WV = None, None, None
 
@@ -137,8 +138,8 @@ class SelfAttention(Layer):
                 K.minimum(time_step, self.attention_width // 2),
                 K.minimum(time_step, (self.attention_width - 1) // 2),
             )
-            # mask values from current location
-            local = tf.matrix_set_diag(local, tf.zeros(time_step))
+            if self.masking:  # mask values from current location
+                local = tf.matrix_set_diag(local, tf.zeros(time_step))
             score = score * K.expand_dims(local, 0)
 
         score = K.softmax(score)
