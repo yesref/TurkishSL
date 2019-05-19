@@ -48,6 +48,8 @@ class TaggingModel:
         rnn_out = Bidirectional(get_rnn(rnn_type, state_size, rnn_dropout, recurrent_dropout))(self.rnn_input)
         # out = MultiHeadSelfAttention(2, int(state_size/2))([rnn_out, rnn_out, rnn_out, rnn_out, rnn_out])
 
+        rnn_out = self_attention(rnn_out, state_size*2, self_att_width, self_att_dropout, masking=True)
+
         if use_morpheme and use_morph_self_att and self_att_concat_pos == 'BeforeCRF':
             rnn_out = concatenate([rnn_out, self.self_att_output])
 
@@ -68,7 +70,7 @@ class TaggingModel:
 
     def _add_morpheme_features(self, add_attention, max_morph_dim, morph_alphabet_size, rnn_type, rnn_state_size,
                                morph_dropout, use_self_att, self_att_width, self_att_dropout, self_att_concat_pos,
-                               self_att_masking=True, self_att_conn=False, self_att_stack=1):
+                               self_att_masking=True, self_att_conn=True, self_att_stack=1):
         # morpheme model with single rnn and attention for morphemes of a word
         morph_inp = Input(shape=(max_morph_dim, morph_alphabet_size,), name='morph_inputs')
         if add_attention:
