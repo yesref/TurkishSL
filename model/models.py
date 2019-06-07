@@ -4,6 +4,7 @@ from keras.initializers import RandomUniform
 from keras_contrib.layers import CRF
 
 from model.attention import VanillaAttention, SelfAttention
+from model.elmo import ElmoEmbeddingLayer
 
 
 def get_rnn(rnn_type, state_size, rnn_dropout, recurrent_dropout, sequences=True):
@@ -35,6 +36,7 @@ class TaggingModel:
         words_input = Input(shape=(None,), dtype='int32', name='words_input')
         self.rnn_input = Embedding(input_dim=word_embeddings.shape[0], output_dim=word_embeddings.shape[1],
                                    weights=[word_embeddings], trainable=False)(words_input)
+        #self.rnn_input2 = ElmoEmbeddingLayer()(words_input)
         self.model_input = [words_input]
 
         if use_morpheme:
