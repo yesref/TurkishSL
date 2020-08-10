@@ -86,3 +86,48 @@ def compute_precision(guessed_sentences, correct_sentences):
         precision = float(correct_count) / count
 
     return precision
+
+
+def get_ner_type(ner_tag):
+    if ner_tag.startswith('B-') or ner_tag.startswith('I-'):
+        return ner_tag[2:]
+    else:
+        return ner_tag
+
+
+def draw_confusion_matrix(tag_alphabet, guessed_sentences, correct_sentences):
+    assert (len(guessed_sentences) == len(correct_sentences))
+    cm = np.zeros((4, 4))
+    morph2Idx = {'O': 0, 'PERSON': 1, 'ORGANIZATION': 2, 'LOCATION': 3}
+
+    for sentenceIdx in range(len(guessed_sentences)):
+        guessed_stc = guessed_sentences[sentenceIdx]
+        correct_stc = correct_sentences[sentenceIdx]
+        assert (len(guessed_stc) == len(correct_stc))
+
+        guessed_stc = [tag_alphabet.get_instance(element) for element in guessed_stc]
+        correct_stc = [tag_alphabet.get_instance(element) for element in correct_stc]
+
+        idx = 0
+        while idx < len(correct_stc):
+            guessed_token = guessed_stc[idx]
+            correct_token = correct_stc[idx]
+            idx += 1
+
+            if correct_token == 'O':
+                if guessed_token[0] == 'I':
+                    continue
+            elif correct_token[0] == 'B':
+                if guessed_token == correct_token:
+                    while idx < len(correct_stc) and correct_stc[idx][0] == 'I':
+                        if correct_stc[idx] != guessed_stc[idx]:
+                            guessed_token = guessed_stc[idx]
+                        idx += 1
+                    if idx < len(correct_stc) and guessed_stc[idx][0] == 'I':  # If the guessed chunk was longer
+                        guessed_token = 'O'
+            else:  # correct_token[0] == 'I'
+                continue
+
+            cm[morph2Idx[get_ner_type(correct_token)]][morph2Idx[get_ner_type(guessed_token)]] += 1
+
+    return cm

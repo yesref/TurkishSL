@@ -70,6 +70,9 @@ class TaggingModel:
     def get_model(self):
         return self.model
 
+    def set_model(self, loaded_model):
+        self.model = loaded_model
+
     def _add_morpheme_features(self, add_attention, max_morph_dim, morph_alphabet_size, rnn_type, rnn_state_size,
                                morph_dropout, use_self_att, self_att_width, self_att_dropout, self_att_concat_pos,
                                self_att_masking=True, self_att_conn=True, self_att_stack=1):

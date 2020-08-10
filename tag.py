@@ -1,14 +1,17 @@
 
 from input.embeddings import read_embeddings_file
 from input.read_dataset import read_data_files
-from util.evaluation import compute_f1
+from util.evaluation import compute_f1, draw_confusion_matrix
 from util.logger import get_logger
 from util.util import get_max_word_morpheme_dim
 from util.preprocess import get_data_ids, get_batch_lengths, iterate_batches
 from model.models import TaggingModel
 
 import numpy as np
+import pandas as pd
+import seaborn as sn
 import configargparse
+import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
 from keras.utils import to_categorical
 
@@ -101,14 +104,38 @@ tagging_model.get_model().summary()
 all_results = []
 for j in range(conf.executions):
 
+    losses_train, losses_dev = [], []
+
     # train model with using training batches
     for epoch in range(1, epochs+1):
+        loss_train, loss_dev = [], []
+
         for i, batch in enumerate(tqdm(iterate_batches(train_dataset, train_batch_lengths),
                                        desc=str.format("Train Epoch %d/%d: " % (epoch, epochs)))):
             words, chars, morphs, labels = batch
             labels = [to_categorical(label, num_classes=label_alphabet.size()) for label in labels]
             morphs = to_categorical(morphs, num_classes=morph_alphabet.size())
-            tagging_model.train(conf.use_cnn, conf.use_morpheme, words, chars, morphs, labels)
+            loss_train.append(tagging_model.train(conf.use_cnn, conf.use_morpheme, words, chars, morphs, labels))
+
+        for i, batch in enumerate(tqdm(iterate_batches(dev_dataset, dev_batch_lengths),
+                                       desc=str.format("Validation Epoch %d/%d: " % (epoch, epochs)))):
+            words, chars, morphs, labels = batch
+            labels = [to_categorical(label, num_classes=label_alphabet.size()) for label in labels]
+            morphs = to_categorical(morphs, num_classes=morph_alphabet.size())
+            loss_dev.append(tagging_model.validate(conf.use_cnn, conf.use_morpheme, words, chars, morphs, labels))
+
+        losses_train.append(loss_train)
+        losses_dev.append(loss_dev)
+
+    # plt.plot([sum(losses)/len(losses) for losses in losses_train])
+    # plt.plot([sum(losses)/len(losses) for losses in losses_dev])
+    # plt.title('Model Hata Eğrisi')
+    # plt.ylabel('Hata (Loss)')
+    # plt.xlabel('Devir (Epoch)')
+    # plt.legend(['train', 'test'], loc='upper left')
+    # plt.show()
+
+    tagging_model.get_model().save('sl_model.h5')
 
     correct_labels = []
     pred_labels = []
@@ -123,6 +150,44 @@ for j in range(conf.executions):
 
     all_results.append(compute_f1(conf.problem_type, pred_labels, correct_labels, label_alphabet))
     logger.info('Execution ' + str(j+1) + ' has finished')
+
+    stc_orj, corr_hata_analysis, pred_hata_analysis = [], [], []
+    for i in range(len(correct_labels)):
+        if correct_labels[i] != pred_labels[i]:
+            corr_hata_analysis.append(correct_labels[i])
+            pred_hata_analysis.append(pred_labels[i])
+            stc_orj.append(test_dataset[i][0])
+
+    if conf.problem_type == 'NER':
+        cm = draw_confusion_matrix(label_alphabet, pred_labels, correct_labels)
+
+        cm_lbl = ['O', 'PERSON', 'ORGANIZATION', 'LOCATION']
+    else:
+        cm_dim = label_alphabet.size()-2
+        cm_lbl = label_alphabet.get_content()['instances'][1:-1]
+
+        cm = np.zeros((cm_dim, cm_dim))
+        for i in range(len(pred_labels)):
+            for j in range(len(pred_labels[i])):
+                cm[correct_labels[i][j] - 1][pred_labels[i][j] - 1] += 1
+
+    cm_sum = np.sum(cm, axis=1)
+    cm_avg = (cm.T * 100 / cm_sum).T
+
+    cm_df = pd.DataFrame(cm, index=cm_lbl, columns=cm_lbl)
+    cm_df_avg = pd.DataFrame(cm_avg, index=cm_lbl, columns=cm_lbl)
+
+    plt.figure(figsize=(10, 7))
+    sn.heatmap(cm_df, annot=True, cmap="YlGnBu", fmt='.0f', vmin=0, vmax=500, annot_kws={"size": 16})
+    plt.ylabel('Doğru Etiketler')
+    plt.xlabel('Tahmin Edilen Etiketler')
+    plt.show()
+
+    plt.figure(figsize=(10, 7))
+    sn.heatmap(cm_df_avg, annot=True, cmap="YlGnBu", fmt='.2f', vmin=0, vmax=100, annot_kws={"size": 16})
+    plt.ylabel('Doğru Etiketler')
+    plt.xlabel('Tahmin Edilen Etiketler')
+    plt.show()
 
 for results in all_results:
     if conf.problem_type == 'NER':
